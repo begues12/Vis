@@ -159,9 +159,15 @@ class ImageFolder:
         
     def load_images(self):
         log_message("Cargando imágenes...")
-        self.original_bg = Image.open(os.path.join(self.path, "background.png"))
-        self.center_image = Image.open(os.path.join(self.path, "center.png"))
+
+        # Parámetros para la prueba de rendimiento
+        max_file_size = 5000000
+        max_resolution = 1920 * 1080 
+
+        self.original_bg = performance_test(os.path.join(self.path, "background.png"), max_file_size, max_resolution)
+        self.center_image = performance_test(os.path.join(self.path, "center.png"), max_file_size, max_resolution)
         self.background_image = self.scale_to_fit(self.original_bg)
+
 
     def preload_images(self):
         self.rotated_images = []
@@ -371,6 +377,17 @@ def get_max_workers():
     """Get the maximum number of threads that can be used for concurrent tasks."""
     return os.cpu_count() or 1
 
+def performance_test(image_path, max_file_size, max_resolution):
+    image = Image.open(image_path)
+    file_size = os.path.getsize(image_path)
+    resolution = image.size[0] * image.size[1]
+
+    if file_size > max_file_size or resolution > max_resolution:
+        factor = max(file_size / max_file_size, resolution / max_resolution)
+        new_size = (int(image.size[0] / factor**0.5), int(image.size[1] / factor**0.5))
+        image = image.resize(new_size, Image.ANTIALIAS)
+
+    return image
 
 def main():
     log_message("Inicializando programa...")
