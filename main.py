@@ -160,8 +160,8 @@ class ImageFolder:
     def load_images(self):
         log_message("Cargando imágenes...")
 
-        # Parámetros para la prueba de rendimiento
-        max_file_size = 5000000
+        # 1MB y 800x600 son los límites de tamaño y resolución
+        max_file_size = 1024 * 1024
         max_resolution = 800 * 600 
 
         self.original_bg = performance_test(os.path.join(self.path, "background.png"), max_file_size, max_resolution)
