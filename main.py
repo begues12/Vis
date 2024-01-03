@@ -162,7 +162,7 @@ class ImageFolder:
 
         # Parámetros para la prueba de rendimiento
         max_file_size = 5000000
-        max_resolution = 1920 * 1080 
+        max_resolution = 800 * 600 
 
         self.original_bg = performance_test(os.path.join(self.path, "background.png"), max_file_size, max_resolution)
         self.center_image = performance_test(os.path.join(self.path, "center.png"), max_file_size, max_resolution)
