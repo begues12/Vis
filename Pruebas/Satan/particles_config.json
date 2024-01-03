@@ -1,0 +1,11 @@
+{
+    "total_particles": 50,
+    "particle_properties": [
+        {
+            "color": [255, 0, 0],
+            "size_min": 3,
+            "size_max": 7,
+            "velocity_range": [1, 3]
+        }
+    ]
+}

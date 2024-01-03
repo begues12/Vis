@@ -1,0 +1,12 @@
+{
+    "total_particles": 20,
+    "particle_properties": [
+        {
+            "src" : "images/Selva/particle.png",
+            "color": [0, 255, 0],
+            "size_min": 30,
+            "size_max": 40,
+            "velocity_range": [1, 3]
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+{
+    "total_particles": 50,
+    "particle_properties": [
+        {
+            "src": "images/Betty/particle.png",
+            "color": [255, 0, 0],
+            "size_min": 10,
+            "size_max": 15,
+            "velocity_range": [1, 3]
+        }
+    ]
+}

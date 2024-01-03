@@ -1,0 +1,12 @@
+{
+    "total_particles": 15,
+    "particle_properties": [
+        {
+            "src" : "images/Japan/particle.png",
+            "color": [255, 183, 197],
+            "size_min": 50,
+            "size_max": 60,
+            "velocity_range": [2, 4]
+        }
+    ]
+}
