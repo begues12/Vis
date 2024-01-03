@@ -3,8 +3,8 @@
     "particle_properties": [
         {
             "color": [255, 0, 0],
-            "size_min": 3,
-            "size_max": 7,
+            "size_min": 5,
+            "size_max": 20,
             "velocity_range": [1, 3]
         }
     ]

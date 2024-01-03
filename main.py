@@ -10,6 +10,7 @@ import random
 import time
 import concurrent.futures
 import collections
+import pyaudio
 
 class LightningManager():
     def __init__(self, screen_width, screen_height, num_branches, num_lightnings=50):
@@ -56,7 +57,8 @@ class Particle:
         self.size_min = config["size_min"]
         self.size_max = config["size_max"]
         self.image = self.get_image(config.get("src")) if "src" in config else None
-        
+        self.original_image = self.get_image(config.get("src")) if "src" in config else None
+
     def get_color(self, color_config):
         if color_config == "random":
             return [random.randint(0, 255) for _ in range(3)]
@@ -75,6 +77,9 @@ class Particle:
         new_size = self.base_size + (volume_level - 0.5) * 10
         self.size = max(self.size_min, min(new_size, self.size_max))
 
+        if self.image:
+            self.image = pygame.transform.scale(self.original_image, (self.size, self.size))
+        
     def update_visibility(self, is_loud):
         if is_loud:
             self.size = min(self.size_max, self.size + 1) 
@@ -84,9 +89,10 @@ class Particle:
     def get_image(self, src):
         try:
             image = pygame.image.load(src)
-            return pygame.transform.scale(image, (self.size, self.size))
+            return image  # Devuelve la imagen sin escalar
         except pygame.error:
             return None
+
     
     def draw(self, screen):
         if self.image:
@@ -156,6 +162,7 @@ class ImageFolder:
         self.pause_rotation = False
         self.volume_level = 0
         self.pause_duration = 200  # Duración de la pausa en milisegundos
+        self.current_scale_factor = 1.0
         
     def load_images(self):
         log_message("Cargando imágenes...")
@@ -244,22 +251,22 @@ class ImageFolder:
         if hasattr(self, 'particle_thread'):
             self.particle_thread.stop()
 
-    def get_center_image(self, time_elapsed):
-        min_scale, max_scale = 0.9, 1.1
-        cycle_duration = 2  # Duración del ciclo en segundos
+    def get_center_image(self):
+        max_scale = 2.0  # Escala máxima de la imagen
 
-        # Escala base que cambia con el tiempo (efecto de "respiración")
-        time_scale_factor = (max_scale - min_scale) / 2 * math.sin(2 * math.pi * time_elapsed / cycle_duration) + (max_scale + min_scale) / 2
+        # Calcula la escala objetivo en función del volumen (volume_level está normalizado entre 0 y 1)
+        target_scale = 1 + (max_scale - 1) * self.volume_level
 
-        # Escala adicional basada en el volumen (ajusta estos valores según sea necesario)
-        volume_scale_factor = 1 + self.volume_level / 10
+        # Interpola suavemente entre el tamaño actual y el tamaño objetivo
+        scale_change_speed = 0.2  # Velocidad de cambio de escala, ajustar según sea necesario
+        self.current_scale_factor += (target_scale - self.current_scale_factor) * scale_change_speed
 
-        # Factor de escala combinado
-        combined_scale_factor = time_scale_factor * volume_scale_factor
-
-        scaled_width = int(self.center_image.width * self.center_scale * combined_scale_factor)
-        scaled_height = int(self.center_image.height * self.center_scale * combined_scale_factor)
+        # Calcula el nuevo tamaño de la imagen
+        scaled_width = int(self.center_image.width * self.center_scale * self.current_scale_factor)
+        scaled_height = int(self.center_image.height * self.center_scale * self.current_scale_factor)
         resized = self.center_image.resize((scaled_width, scaled_height), Image.ANTIALIAS)
+
+        # Convierte la imagen redimensionada a un formato compatible con pygame
         return pygame.image.fromstring(resized.tobytes(), resized.size, resized.mode)
 
 
@@ -268,37 +275,35 @@ class ImageFolder:
         log_message("Pre-cargando todas las carpetas...")
         return [ImageFolder(path, screen_size) for path in paths]
 
-class CircularBuffer:
-    def __init__(self, size):
-        self.size = size
-        self.buffer = collections.deque(maxlen=size)
-
-    def append(self, data):
-        self.buffer.append(data)
-
-    def get(self):
-        return np.concatenate(self.buffer)
-
 class AudioProcessor(threading.Thread):
-    def __init__(self, buffer_size, sample_rate=44100, channels=2):
+    def __init__(self, buffer_size, sample_rate=44100, channels=1):
         super().__init__()
-        self.buffer = CircularBuffer(buffer_size)
         self.sample_rate = sample_rate
         self.channels = channels
+        self.buffer_size = buffer_size  # CHUNK en el código original
+        self.p = pyaudio.PyAudio()
+        self.sensitivity = 1.5
+        self.stream = self.p.open(format=pyaudio.paInt16,
+                                  channels=self.channels,
+                                  rate=self.sample_rate,
+                                  input=True,
+                                  frames_per_buffer=self.buffer_size)
         self.daemon = True
         self.volume = 0
 
     def run(self):
-        stream = sd.InputStream(samplerate=self.sample_rate, channels=self.channels)
-        with stream:
-            while True:
-                data, _ = stream.read(self.sample_rate // 10)  # Lee 0.1 segundos de audio
-                self.buffer.append(data)
-                self.volume = np.linalg.norm(data) * 10
+        while True:
+            audio_data = np.frombuffer(self.stream.read(self.buffer_size), dtype=np.int16)
+            self.volume = ((max(abs(audio_data.min()), abs(audio_data.max())) / 32768) * 3) * self.sensitivity 
 
     def get_volume(self):
+        log_message(f"Volumen: {self.volume}")
         return self.volume
 
+    def stop(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
 
 def get_folders_in_directory(directory):
     return [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
@@ -444,10 +449,10 @@ def main():
 
         if transition_start:
             if transition_phase == 1 and lightning_count < 3:
-                lightning = lightning_manager.get_random_lightning()
-                lightning.draw(screen)
-                pygame.display.flip()
-                pygame.time.wait(300)
+                # lightning = lightning_manager.get_random_lightning()
+                # lightning.draw(screen)
+                # pygame.display.flip()
+                # pygame.time.wait(300)
                 screen.fill((255, 255, 255))
                 lightning_count += 1
                 if lightning_count == 3:
@@ -455,8 +460,8 @@ def main():
 
             elif transition_phase == 2:
                 screen.fill((255, 255, 255))
-                pygame.display.flip()
-                pygame.time.wait(300)
+                # pygame.display.flip()
+                # pygame.time.wait(300)
                 manager.next_folder()
                 folder = manager.get_current_folder()
                 transition_start = False
@@ -471,24 +476,18 @@ def main():
                 if event.key == pygame.K_p:
                     pygame.display.toggle_fullscreen()
                 elif event.key == pygame.K_MINUS and (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                    audio_listener.adjust_threshold(-0.1)
-                    log_message(f"Umbral de audio: {audio_listener.threshold}")
+                    audio_processor.sensitivity -= 0.1
                 elif event.key == pygame.K_EQUALS and (pygame.key.get_mods() & pygame.KMOD_CTRL):
-                    audio_listener.adjust_threshold(0.1)
-                    log_message(f"Umbral de audio: {audio_listener.threshold}")
+                    audio_processor.sensitivity += 0.1
 
                 
         screen.fill((0, 0, 0))
         volume_level = audio_processor.get_volume()
-        sensitivity = 1
-        is_loud = volume_level > 0.9 * sensitivity
-        folder.update_volume_level(is_loud)
-        folder.update_particle_size(is_loud)
-        folder.update_particle_visibility(is_loud)
+        folder.update_volume_level(volume_level)
+        folder.update_particle_size(volume_level)
         folder.start_particle_thread()
-        folder.update_rotation_pause(is_loud)
         bg_img = folder.get_background_image()
-        center_img = folder.get_center_image(pygame.time.get_ticks() / 1000.0)
+        center_img = folder.get_center_image()
         screen.blit(bg_img, bg_img.get_rect(center=(screen_width // 2, screen_height // 2)))
         screen.blit(center_img, center_img.get_rect(center=(screen_width // 2, screen_height // 2)))
 

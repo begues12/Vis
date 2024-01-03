@@ -5,7 +5,7 @@
             "src" : "images/Buda/particle.png",
             "color": [0, 0, 255],
             "size_min": 15,
-            "size_max": 20,
+            "size_max": 30,
             "velocity_range": [1, 2]
         }
     ]

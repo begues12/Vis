@@ -2,9 +2,9 @@
     "total_particles": 20,
     "particle_properties": [
         {
-            "color": [0, 255, 0],
-            "size_min": 30,
-            "size_max": 50,
+            "color": [255, 255, 0],
+            "size_min": 5,
+            "size_max": 20,
             "velocity_range": [1, 3]
         }
     ]
